@@ -8,108 +8,95 @@
         body {
             font-family: Arial, sans-serif;
             background-color: #121212;
-            color: #fff;
+            color: #ffffff;
             display: flex;
-            flex-direction: column;
-            align-items: center;
             justify-content: center;
+            align-items: center;
             height: 100vh;
             margin: 0;
         }
-        h1 {
-            margin-bottom: 20px;
+        .container {
+            text-align: center;
         }
-        input[type="text"] {
-            width: 300px;
-            padding: 10px;
+        button {
+            padding: 10px 20px;
+            margin: 10px;
             border: none;
             border-radius: 5px;
-            margin-bottom: 20px;
-        }
-        .song-list {
-            list-style: none;
-            padding: 0;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        .song-list li {
-            margin: 5px 0;
+            background-color: #1db954;
+            color: white;
             cursor: pointer;
-            padding: 10px;
-            background: #282828;
-            border-radius: 5px;
         }
-        .song-list li:hover {
-            background: #1db954;
+        button:hover {
+            background-color: #1ed760;
+        }
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
-    <h1>Spotify Web Player</h1>
-    <input type="text" id="search" placeholder="Search for a song...">
-    <ul class="song-list" id="songList"></ul>
-    <audio id="audio" controls></audio>
-
+    <div class="container">
+        <h1>Spotify Web Player</h1>
+        <button id="login">Login with Spotify</button>
+        <div id="player" class="hidden">
+            <h2>Now Playing: <span id="track-name">None</span></h2>
+            <button id="play">Play</button>
+            <button id="pause">Pause</button>
+        </div>
+    </div>
     <script>
-        const clientId = '439a939c9365478cb27eea6dd019565a'; // Replace with your Client ID
-        const clientSecret = '4cae1297dbed4d94946933da67e9b044'; // Replace with your Client Secret
-        const redirectUri = 'https://xenonexec.github.io/SpotifyFake/callback'; // Update your redirect URI
-        const tokenUrl = 'https://accounts.spotify.com/api/token';
-        const searchUrl = 'https://api.spotify.com/v1/search';
+        const clientId = '439a939c9365478cb27eea6dd019565a';
+        const redirectUri = 'https://xenonexec.github.io/SpotifyFake/callback';
+        const scopes = 'user-read-playback-state user-modify-playback-state';
+        
+        document.getElementById('login').addEventListener('click', () => {
+            const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=token`;
+            window.location.href = authUrl;
+        });
 
-        async function getToken() {
-            const response = await fetch(tokenUrl, {
-                method: 'POST',
-                headers: {
-                    'Authorization': 'Basic ' + btoa(clientId + ':' + clientSecret),
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'grant_type=client_credentials'
-            });
-            const data = await response.json();
-            return data.access_token;
+        const hash = window.location.hash;
+        let token;
+
+        if (hash) {
+            token = hash.split('&')[0].split('=')[1];
+            document.getElementById('player').classList.remove('hidden');
+            document.getElementById('login').classList.add('hidden');
+            fetchCurrentTrack(token);
         }
 
-        async function searchSongs(query) {
-            const token = await getToken();
-            const response = await fetch(`${searchUrl}?q=${query}&type=track`, {
+        function fetchCurrentTrack(token) {
+            fetch('https://api.spotify.com/v1/me/player/currently-playing', {
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.item) {
+                    document.getElementById('track-name').innerText = data.item.name;
+                } else {
+                    document.getElementById('track-name').innerText = 'No track playing';
+                }
+            });
+        }
+
+        document.getElementById('play').addEventListener('click', () => {
+            controlPlayback(token, 'play');
+        });
+
+        document.getElementById('pause').addEventListener('click', () => {
+            controlPlayback(token, 'pause');
+        });
+
+        function controlPlayback(token, action) {
+            fetch(`https://api.spotify.com/v1/me/player/${action}`, {
+                method: 'PUT',
                 headers: {
                     'Authorization': 'Bearer ' + token
                 }
             });
-            const data = await response.json();
-            return data.tracks.items;
         }
-
-        document.getElementById('search').addEventListener('keypress', async function (e) {
-            if (e.key === 'Enter') {
-                const query = e.target.value;
-                const songs = await searchSongs(query);
-                const songList = document.getElementById('songList');
-                songList.innerHTML = '';
-                songs.forEach(song => {
-                    const li = document.createElement('li');
-                    li.textContent = song.name + ' by ' + song.artists.map(artist => artist.name).join(', ');
-                    li.addEventListener('click', () => {
-                        document.getElementById('audio').src = song.preview_url; // Play song preview
-                        document.getElementById('audio').play();
-                    });
-                    songList.appendChild(li);
-                });
-            }
-        });
-
-        // Handle the callback from Spotify
-        function handleRedirect() {
-            const hash = window.location.hash;
-            if (hash) {
-                const token = new URLSearchParams(hash.substring(1)).get('access_token');
-                console.log("Access Token:", token); // You can store this token for further use
-                window.history.pushState('', document.title, window.location.pathname);
-            }
-        }
-
-        handleRedirect(); // Call this to check for access token
     </script>
 </body>
 </html>
